@@ -2,7 +2,8 @@ const sql = require('../configs/db');
 
 exports.top5Films = (req, res) => {
     const query = `
-        SELECT 
+        SELECT
+        f.film_id, 
     f.title,
     c.name AS category,
     COUNT(r.rental_id) AS rental_count

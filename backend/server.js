@@ -9,11 +9,9 @@ app.use(cors());
 
 const PORT = 5000;
 
-app.use('/films', filmsRoute);
+app.use('/', filmsRoute);
 
-app.use('/', (req, res) => {
-  
-});
+
 
 
 
