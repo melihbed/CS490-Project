@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sakila Rentals</title>
+    <style>
+      .film-card {
+        border: 1px solid #ccc;
+        padding: 10px;
+        margin: 10px;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      .actors-card {
+        border: 1px solid #ccc;
+        padding: 10px;
+        margin: 10px;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+      }
+    </style>
+  </head>
+
+  <body>
+    <h1>Top 5 Rented Films</h1>
+    <div id="films-container" class="grid"></div>
+
+    <h1>Top 5 Actors</h1>
+    <div id="actors-container" class="grid"></div>
+    <script src="script.js"></script>
+  </body>
+</html>

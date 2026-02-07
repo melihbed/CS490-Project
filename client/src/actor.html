@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Actor Details</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+      }
+      #actor-top5films {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+      }
+      .actor-film-card {
+        border: 1px solid #ccc;
+        padding: 10px;
+        margin: 10px;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Actor Details</h1>
+    <div id="actor-details"></div>
+    <a href="index.html">Back to Main Page</a>
+
+    <h2>Actor's Top 5 Films</h2>
+    <div id="actor-top5films"></div>
+
+    <script>
+      // Get the actir ID from the URL query parameter
+      const urlParams = new URLSearchParams(window.location.search);
+      console.log(urlParams);
+      const actorId = urlParams.get("id");
+
+      if (actorId) {
+        // Fetch actor details by makina a request to server
+        fetch(`http://localhost:3000/api/actor/${actorId}`)
+          .then((res) => res.json())
+          .then((data) => {
+            console.log(data);
+            // Assuming the API returns an array with one film object
+            const actor = data[0][0]; // Adjust if the response structure differs
+            const details = document.getElementById("actor-details");
+            details.innerHTML = `
+              <h2>${actor.actor_id}</h2>
+              <p>First Name: ${actor.first_name}</p>
+              <p>Last Name: ${actor.last_name}</p>
+            `;
+          })
+          .catch((err) => console.error("Error fetching film details:", err));
+
+        fetch(`http://localhost:3000/api/actor/${actorId}/top-films`)
+          .then((res) => res.json())
+          .then((data) => {
+            const top5Films = data[0];
+
+            const actorTop5Film = document.getElementById("actor-top5films");
+
+            top5Films.forEach((film) => {
+              const card = document.createElement("div");
+              card.className = "actor-film-card";
+              card.dataset.id = film.film_id;
+
+              card.innerHTML = `
+                            <h3>${film.film_id}</h3>
+                            <h4>${film.title}</h4>
+                            <p>Rental Count: ${film.rental_count}</p>
+
+                    `;
+
+              actorTop5Film.appendChild(card);
+
+              card.addEventListener("click", () => {
+                const filmId = card.getAttribute("data-id");
+                window.location.href = `film.html?id=${filmId}`;
+              });
+            });
+          });
+      } else {
+        document.getElementById("actor-details").innerHTML =
+          "<p>No actor ID provided.</p>";
+      }
+    </script>
+  </body>
+</html>
