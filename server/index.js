@@ -153,7 +153,7 @@ app.get("/api/actor/:id", async (req, res) => {
 
 // Actor's Top 5 Films
 app.get("/api/actor/:id/top-films", async (req, res) => {
-  const actor_id = req.params.actor_id;
+  const actor_id = req.params.id;
 
   try {
     const query = `
@@ -168,7 +168,7 @@ app.get("/api/actor/:id/top-films", async (req, res) => {
             ON i.film_id = f.film_id
         JOIN rental r
             ON r.inventory_id = i.inventory_id
-        WHERE fa.actor_id = 107
+        WHERE fa.actor_id = ?
         GROUP BY f.film_id, f.title
         ORDER BY rental_count DESC
         LIMIT 5;
@@ -178,6 +178,109 @@ app.get("/api/actor/:id/top-films", async (req, res) => {
     res.json(rows);
   } catch (error) {
     console.log(error);
+  }
+});
+
+app.get("/api/films", async (req, res) => {
+  try {
+    // pagination
+    const page = Math.max(parseInt(req.query.page || "1", 10), 1);
+    const limitRaw = parseInt(req.query.limit || "20", 10);
+    const limit = Math.min(Math.max(limitRaw, 1), 100);
+    const offset = (page - 1) * limit;
+
+    // search
+    const type = (req.query.type || "title").toLowerCase(); // title|actor|genre
+    const q = (req.query.q || "").trim();
+    const like = `%${q}%`;
+
+    if (!["title", "actor", "genre"].includes(type)) {
+      return res.status(400).json({ error: "type must be title|actor|genre" });
+    }
+
+    // Build WHERE clause (use EXISTS for actor/genre so we still list ALL actors/genres)
+    let whereSql = "";
+    const whereParams = [];
+
+    if (q) {
+      if (type === "title") {
+        whereSql = "WHERE f.title LIKE ?";
+        whereParams.push(like);
+      } else if (type === "actor") {
+        whereSql = `
+          WHERE EXISTS (
+            SELECT 1
+            FROM film_actor fa2
+            JOIN actor a2 ON a2.actor_id = fa2.actor_id
+            WHERE fa2.film_id = f.film_id
+              AND CONCAT(a2.first_name, ' ', a2.last_name) LIKE ?
+          )
+        `;
+        whereParams.push(like);
+      } else if (type === "genre") {
+        whereSql = `
+          WHERE EXISTS (
+            SELECT 1
+            FROM film_category fc2
+            JOIN category c2 ON c2.category_id = fc2.category_id
+            WHERE fc2.film_id = f.film_id
+              AND c2.name LIKE ?
+          )
+        `;
+        whereParams.push(like);
+      }
+    }
+
+    // total count for pagination UI
+    const countSql = `
+      SELECT COUNT(*) AS total
+      FROM film f
+      ${whereSql}
+    `;
+    const [countRows] = await pool.query(countSql, whereParams);
+    const total = countRows[0]?.total ?? 0;
+
+    // data page (always includes genres + actors)
+    const dataSql = `
+      SELECT
+        f.film_id,
+        f.title,
+        f.description,
+        f.release_year,
+        f.special_features,
+        f.rental_rate,
+        f.rating,
+        GROUP_CONCAT(DISTINCT c.name ORDER BY c.name SEPARATOR ', ') AS genres,
+        GROUP_CONCAT(
+          DISTINCT CONCAT(a.first_name, ' ', a.last_name)
+          ORDER BY a.last_name, a.first_name
+          SEPARATOR ', '
+        ) AS actors
+      FROM film f
+      LEFT JOIN film_category fc ON fc.film_id = f.film_id
+      LEFT JOIN category c ON c.category_id = fc.category_id
+      LEFT JOIN film_actor fa ON fa.film_id = f.film_id
+      LEFT JOIN actor a ON a.actor_id = fa.actor_id
+      ${whereSql}
+      GROUP BY
+        f.film_id, f.title, f.description, f.release_year,
+        f.special_features, f.rental_rate, f.rating
+      ORDER BY f.title ASC, f.film_id ASC
+      LIMIT ? OFFSET ?;
+    `;
+
+    const [rows] = await pool.query(dataSql, [...whereParams, limit, offset]);
+
+    res.json({
+      page,
+      limit,
+      total,
+      pages: Math.ceil(total / limit),
+      items: rows,
+    });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ error: "Internal server error." });
   }
 });
 
