@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Films</title>
+
+    <style>
+    .topbar {
+        margin: 10px;
+        padding-top: 20px;
+
+    }
+    .topbar label {
+        margin-left: 30px;
+    }
+    .grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+    }
+    .film-card {
+        border: 1px solid #ccc;
+        padding: 10px;
+        margin: 10px;
+        border-radius: 8px;
+        cursor: pointer;
+    }
+
+      .pagination {
+        display: flex;
+        justify-content: center;
+      }
+      .pagination a {
+        color: black;
+        float: left;
+        padding: 8px 16px;
+        text-decoration: none;
+        transition: background-color .3s;
+    }
+    
+    .pagination a.disabled {
+    pointer-events: none;
+    opacity: 0.5;
+    }
+
+    /* Style the active/current link */
+    .pagination a.active {
+    background-color: dodgerblue;
+    color: white;
+    }
+    /* Add a grey background color on mouse-over */
+    .pagination a:hover:not(.active) {background-color: #ddd;}
+
+    </style>
+  </head>
+  <body>
+    <!-- Search & Limit -->
+    <div class="topbar">
+      <label for="search">Search Film: </label>
+      <input type="search" name="search" id="search" />
+      <button id="searchBtn" type="button">Search</button>
+
+      <label for="type">Type: </label>
+      <select id="type">
+        <option value="title" selected>title</option>
+        <option value="actor">actor</option>
+        <option value="genre">genre</option>
+      </select>
+
+      <label for="limit">Limit: </label>
+      <select id="limit">
+        <option value="10">10</option>
+        <option value="20" selected>20</option>
+        <option value="30">30</option>
+        <option value="40">40</option>
+        <option value="50">50</option>
+      </select>
+    </div>
+
+    <!-- Films -->
+    <div id="films" class="grid"></div>
+
+
+    <div id="pageInfo"></div>
+    <div class="pagination" id="pagination">
+
+    </div>
+
+    </div>
+
+    </div>
+  </body>
+
+  <script>
+    let page = 1;
+    function buildUrl() {
+      const q = document.getElementById("search").value.trim();
+      console.log(q);
+      const limit = document.getElementById("limit").value;
+      const type = document.getElementById("type").value;
+
+      const url = new URL("/api/films", window.location.origin);
+      console.log(url);
+
+      url.searchParams.set("limit", String(limit));
+      url.searchParams.set("page", String(page));
+      url.searchParams.set("type", String(type));
+
+      if (q) {
+        url.searchParams.set("q", q);
+      }
+      return url;
+    }
+
+    function makePageLink(label, targetPage, { active = false, disabled = false} = {}){
+        const a = document.createElement("a");
+        a.href = "#";
+        a.textContent = label;
+
+        if (active) a.classList.add("active");
+        if (disabled) a.classList.add("disabled");
+
+        a.dataset.page = String(targetPage);
+        return a;
+    }
+    
+    function renderPagination(){
+        const pag = document.getElementById("pagination");
+        pag.innerHTML = "";
+
+        pag.appendChild(
+            makePageLink("<<", page - 1, {disabled: page<=1 })
+        );
+
+        const windowSize = 5;
+        let start = Math.max(1, page - Math.floor(windowSize / 2));
+
+        let end = Math.min(pages, start + windowSize - 1);
+        start = Math.max(1, end - windowSize + 1);
+
+        for (let p = start; p <= end; p++) {
+            pag.appendChild(
+            makePageLink(String(p), p, { active: p === page })
+            );
+        }
+
+        // Next
+        pag.appendChild(
+            makePageLink("»", page + 1, { disabled: page >= pages })
+        );
+
+    }
+
+    async function loadFilms() {
+      const url = buildUrl();
+
+      const resp = await fetch(url);
+      const data = await resp.json();
+
+      // update pagination state from backend
+      pages = data.pages || 1;
+      if (page > pages) page = pages;
+
+      document.getElementById("pageInfo").textContent = `Page ${page}/${pages}-Total: ${data.total ?? 0}`;
+        console.log(data);
+      const films = data.items;
+      console.log(films);
+
+      const filmsDiv = document.getElementById("films");
+      filmsDiv.innerHTML = "";
+
+      films.forEach((film) => {
+        const card = document.createElement("div");
+        card.className = "film-card";
+
+        card.dataset.id = film.film_id; // set this to film_id so the click listener works
+
+        card.innerHTML = `
+            <h2>${film.title}</h2>
+            <p>Film ID: ${film.film_id}</p>
+            <p>Description: ${film.description}</p>
+            <p>Actors: ${film.actors.toLowerCase()} </p>
+            <p>Release Year: ${film.release_year}</p>
+            <p>Genre: ${film.genres} </p>
+            <p>Special Features: ${film.special_features}</p>
+            <p>Rental Rate: <strong>$${film.rental_rate}</strong></p>
+            
+
+            `;
+            
+            card.addEventListener("click", ()=>{
+                const filmId = card.getAttribute("data-id");
+                window.location.href = `film.html?id=${filmId}`
+            })
+        filmsDiv.appendChild(card);
+      });
+      renderPagination();
+    }
+
+    // One click handler for all pagination links (event delegation) :contentReference[oaicite:6]{index=6}
+    document.getElementById("pagination").addEventListener("click", (e) => {
+    const a = e.target.closest("a");
+    if (!a) return;
+    e.preventDefault();
+
+    if (a.classList.contains("disabled")) return;
+
+    const nextPage = parseInt(a.dataset.page, 10);
+    if (!Number.isFinite(nextPage)) return;
+    if (nextPage < 1 || nextPage > pages) return;
+
+    page = nextPage;
+    loadFilms();
+    });
+
+    // Reset to page 1 when filters change
+    document.getElementById("limit").addEventListener("change", () => {
+    page = 1;
+    loadFilms();
+    });
+    
+    document.getElementById("type").addEventListener("change", () => {
+    page = 1;
+    loadFilms();
+    });
+    
+    document.getElementById("searchBtn").addEventListener("click", () => {
+    page = 1;
+    loadFilms();
+    });
+   
+    document.getElementById("search").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+        page = 1;
+        loadFilms();
+    }
+    });
+    
+    loadFilms(); // initial films load
+
+    
+  </script>
+</html>
