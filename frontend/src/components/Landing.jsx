@@ -1,4 +1,4 @@
-import {Card} from 'react-bootstrap'
+import {Card, Button} from 'react-bootstrap'
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 
@@ -29,6 +29,7 @@ function Landing() {
                         <Card.Body>
                             <Card.Title>{film.title}</Card.Title>
                             <Card.Text>{film.category}</Card.Text>
+                            <Card.Text><Button variant="primary" onClick={() => alert(film.description)}>View Details</Button></Card.Text>
                         </Card.Body>
                         <Card.Footer>
                             Rentals: {film.rental_count}

@@ -6,6 +6,7 @@ exports.top5Films = (req, res) => {
         f.film_id, 
     f.title,
     c.name AS category,
+    f.description,
     COUNT(r.rental_id) AS rental_count
 FROM rental r
 JOIN inventory i 
