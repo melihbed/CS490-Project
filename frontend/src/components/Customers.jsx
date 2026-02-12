@@ -1,12 +1,15 @@
 import {useState, useEffect} from 'react';
 import axios from 'axios';
-//import {Tables} from 'react-bootstrap';
+import {Table} from 'react-bootstrap';
 
 
 
 
 function Customers() {
     const [customers, setCustomers] = useState([]);
+
+
+
 
     useEffect(() => {
         axios.get('http://localhost:5000/customers')
@@ -28,14 +31,23 @@ function Customers() {
     return (
         <div>
             <h1>Welcome to the Customers Page!</h1>
+            <div className="search-bar">
+                <input type="text" placeholder="Search for customers by ID, Firstname or LastName" />
+                <button>Search</button>
+            </div>
+            
+            
             <div className="customer-table" style={{ marginTop: '20px' }}>
-                <table className="table table-striped">
+                <Table striped bordered='true' hover>
                     <thead>
                         <tr>
                             <th>Customer ID</th>
                             <th>First Name</th>
                             <th>Last Name</th>
                             <th>Email</th>
+                            <th>Address</th>
+                            <th>City</th>
+                            <th>Country</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -45,10 +57,13 @@ function Customers() {
                                 <td>{customer.first_name}</td>
                                 <td>{customer.last_name}</td>
                                 <td>{customer.email}</td>
+                                <td>{customer.address}</td>
+                                <td>{customer.city}</td>
+                                <td>{customer.country}</td>
                             </tr>
                         ))}
                     </tbody>
-                </table>
+                </Table>
             </div>
         </div>
     );
