@@ -1,17 +1,20 @@
 const express = require("express");
 const cors = require("cors");
 const pool = require("./db/db");
-const path = require("path"); // Add this at the top
-const { error } = require("console");
 
-const port = 3000;
+
+
+const port = 4000;
 
 const app = express();
 
 // Middleware START
+// Log and guard large request headers to help diagnose 431 errors
+
+
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, "../client/public")));
+
 // Middleware END
 
 // Routes START

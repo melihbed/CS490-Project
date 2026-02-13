@@ -9,7 +9,7 @@ In the project directory, you can run:
 ### `npm start`
 
 Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+Open [http://localhost:3001](http://localhost:3001) to view it in your browser (the backend typically runs on port 3000).
 
 The page will reload when you make changes.\
 You may also see any lint errors in the console.
@@ -26,6 +26,11 @@ It correctly bundles React in production mode and optimizes the build for the be
 
 The build is minified and the filenames include the hashes.\
 Your app is ready to be deployed!
+
+## Notes about this repo
+
+- Legacy static files in `public/` have been removed; the app now uses React routes for pages: `/`, `/films`, `/customers`, `/film/:id`, `/actor/:id`.
+- The client proxies API requests to the backend at `http://localhost:3000` during development (see `proxy` in `package.json`).
 
 See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
 
