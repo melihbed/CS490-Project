@@ -337,6 +337,7 @@ app.get("/api/customers", async (req, res) => {
       c.email,
       c.active,
       c.create_date,
+      c.store_id,
       a.address,
       a.district,
       ci.city,
@@ -345,6 +346,7 @@ app.get("/api/customers", async (req, res) => {
     LEFT JOIN address a ON a.address_id = c.address_id
     LEFT JOIN city ci ON ci.city_id = a.city_id
     LEFT JOIN country co ON co.country_id = ci.country_id
+
     ${whereSql}
     ORDER BY c.first_name ASC, c.last_name ASC
     LIMIT ? OFFSET ?
@@ -366,128 +368,101 @@ app.get("/api/customers", async (req, res) => {
 });
 
 app.post("/api/customers", async (req, res) => {
+  const conn = await pool.getConnection();
+
+  const norm = (v) => (v === undefined ? null : v);
+  const str = (v, fallback = "") => {
+    if (v === undefined || v === null) return fallback;
+    return String(v).trim();
+  };
+
+  const execSafe = async (sql, params, tag) => {
+    const badIdx = params.findIndex((p) => p === undefined);
+    if (badIdx !== -1) {
+      throw new Error(`${tag}: param[${badIdx}] is undefined`);
+    }
+    return conn.execute(sql, params.map(norm));
+  };
+
   try {
-    const {
-      first_name,
-      last_name,
-      email,
-      address,
-      district,
-      city, // City NAME (not ID)
-      country, // Country NAME (not ID)
-      postal_code,
-      phone,
-    } = req.body;
+    const first_name = str(req.body.first_name);
+    const last_name = str(req.body.last_name);
+    const email = str(req.body.email);
+    const address = str(req.body.address);
 
-    // Validate the given fields
-    if (!first_name || !last_name || !email || !address || !city || !country) {
-      return res.status(400).json({
-        error: "Fill out the required fields!",
-      });
+    // accept multiple key names from UI
+    const cityName = str(req.body.city ?? req.body.city_name);
+    const countryName = str(req.body.country ?? req.body.country_name);
+
+    const district = str(req.body.district, "N/A");
+    const phone = str(req.body.phone, "N/A");
+    const postal_code = str(req.body.postal_code, "") || null;
+
+    const store_id = Number(req.body.store_id);
+
+    if (!first_name || !last_name || !email || !address || !cityName || !countryName || !Number.isInteger(store_id)) {
+      return res.status(400).json({ error: "Missing/invalid required fields." });
     }
 
-    // Validate the email address
-    const emailValidationRegex =
-      /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-
-    if (!emailValidationRegex.test(email)) {
-      return res.status(400).json({ error: "Invalid email format." });
-    }
-
-    // Check if the customer already exists
-    const checkEmailSql = `SELECT customer_id 
-    FROM customer WHERE email = ?
-  `;
-
-    const [existingCustomer] = await pool.query(checkEmailSql, [email]);
-
-    if (existingCustomer.length > 0) {
-      return res.status(409).json({ error: "Email already exists!" });
-    }
+    await conn.beginTransaction();
 
     let country_id;
-    // Find a country_id from given country
-    const findCountrySql = `
-    Select country_id from country
-    where country = ?;
-    `;
-
-    const [countryRows] = await pool.query(findCountrySql, [country]);
-    console.log(countryRows);
-
-    if (countryRows.length > 0) {
+    const [countryRows] = await execSafe(
+      "SELECT country_id FROM country WHERE country = ?",
+      [countryName],
+      "select-country"
+    );
+    if (countryRows.length) {
       country_id = countryRows[0].country_id;
     } else {
-      res.status(409).json({ error: "The country doesn't exist." });
+      const [insCountry] = await execSafe(
+        "INSERT INTO country (country, last_update) VALUES (?, NOW())",
+        [countryName],
+        "insert-country"
+      );
+      country_id = insCountry.insertId;
     }
 
-    // Find a city_id from given city
     let city_id;
-    const findCitySql = `SELECT city_id FROM city WHERE city = ? AND country_id = ?`;
-    const [cityRows] = await pool.query(findCitySql, [city, country_id]);
-
-    if (cityRows.length > 0) {
+    const [cityRows] = await execSafe(
+      "SELECT city_id FROM city WHERE city = ? AND country_id = ?",
+      [cityName, country_id],
+      "select-city"
+    );
+    if (cityRows.length) {
       city_id = cityRows[0].city_id;
     } else {
-      // Create a new city if it doesn't exist
-      const insertCitySql = `
-        INSERT INTO city (city, country_id) VALUES (?, ?)
-      `;
-      const [cityResult] = await pool.execute(insertCitySql, [
-        city,
-        country_id,
-      ]);
-      city_id = cityResult.insertId;
+      const [insCity] = await execSafe(
+        "INSERT INTO city (city, country_id, last_update) VALUES (?, ?, NOW())",
+        [cityName, country_id],
+        "insert-city"
+      );
+      city_id = insCity.insertId;
     }
 
-    // Insert address
-    const addressSql = `
-      INSERT INTO address (address, district, city_id, postal_code, phone, location)
-      VALUES (?, ?, ?, ?, ?, POINT(0, 0))
-    `;
+    const [insAddress] = await execSafe(
+      `INSERT INTO address (address, district, city_id, postal_code, phone, location, last_update)
+       VALUES (?, ?, ?, ?, ?, POINT(0,0), NOW())`,
+      [address, district, city_id, postal_code, phone],
+      "insert-address"
+    );
+    const address_id = insAddress.insertId;
 
-    const [addressResult] = await pool.execute(addressSql, [
-      address,
-      district,
-      city_id,
-      postal_code,
-      phone,
-    ]);
-    const new_address_id = addressResult.insertId;
+    const [insCustomer] = await execSafe(
+      `INSERT INTO customer (store_id, first_name, last_name, email, address_id, active, create_date, last_update)
+       VALUES (?, ?, ?, ?, ?, 1, NOW(), NOW())`,
+      [store_id, first_name, last_name, email, address_id],
+      "insert-customer"
+    );
 
-    // Add a customer
-    const customerSql = `
-    INSERT INTO customer (
-      first_name, 
-      last_name, 
-      email, 
-      address_id, 
-      store_id,
-      active,
-      create_date
-    )
-    VALUES (?, ?, ?, ?, 1, 1, NOW())
-  `;
-    const [customerResult] = await pool.execute(customerSql, [
-      first_name,
-      last_name,
-      email,
-      new_address_id,
-    ]);
-
-    // Success Response
-    res.status(201).json({
-      message: "Customer created successfully",
-      customer_id: customerResult.insertId,
-      first_name,
-      last_name,
-      email,
-      city,
-      country,
-    });
+    await conn.commit();
+    return res.status(201).json({ customer_id: insCustomer.insertId, address_id, city_id, country_id });
   } catch (err) {
-    console.log(err);
-    res.status(500).json("Internal Server Error.");
+    await conn.rollback();
+    console.log("POST /api/customers error:", err.message, err);
+    return res.status(500).json({ error: err.message || "Internal Server Error." });
+  } finally {
+    conn.release();
   }
 });
 // Routes END

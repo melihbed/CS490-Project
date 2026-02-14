@@ -1,6 +1,48 @@
 import React, { useEffect, useState } from 'react';
-import { Row, Col, Card, Form, Button, Pagination, Modal } from 'react-bootstrap';
+import { Row, Col, Card, Form, Button, Pagination, Modal, Alert } from 'react-bootstrap';
 import api from '../services/api';
+
+const INITIAL_FORM = {
+  first_name: "",
+  last_name: "",
+  email: "",
+  address: "",
+  city: "",
+  country: "",
+  district: "",
+  postal_code: "",
+  phone: "",
+  store_id: ""
+};
+
+const toText = (v, fallback = "") => (v == null ? fallback : String(v).trim());
+const toInt = (v) => {
+  const n = Number(v);
+  return Number.isInteger(n) ? n : null;
+};
+
+const buildPayload = (form) => ({
+  first_name: toText(form.first_name),
+  last_name: toText(form.last_name),
+  email: toText(form.email),
+  address: toText(form.address),
+  city: toText(form.city || form.city_name),
+  country: toText(form.country || form.country_name),
+  district: toText(form.district, "N/A") || "N/A",
+  postal_code: toText(form.postal_code) || null,
+  phone: toText(form.phone, "N/A") || "N/A",
+  store_id: toInt(form.store_id)
+});
+
+const validatePayload = (p) => {
+  const required = ["first_name", "last_name", "email", "address", "city", "country"];
+  const missing = required.filter((k) => !p[k]);
+  if (!Number.isInteger(p.store_id)) missing.push("store_id");
+  return missing;
+};
+
+const extractStoreIds = (rows) =>
+  [...new Set(rows.map((c) => Number(c.store_id)).filter(Number.isInteger))].sort((a, b) => a - b);
 
 export default function Customers(){
   const [customers, setCustomers] = useState([]);
@@ -11,7 +53,22 @@ export default function Customers(){
   const [total, setTotal] = useState(0);
   const [show, setShow] = useState(false);
   const [stores, setStores] = useState([]);
-  const [formData, setFormData] = useState({});
+  const [formData, setFormData] = useState(INITIAL_FORM);
+  const [successMsg, setSuccessMsg] = useState("");
+  const [submitError, setSubmitError] = useState("");
+
+  const resetForm = () => setFormData(INITIAL_FORM);
+
+  const closeModal = () => {
+    setShow(false);
+    setSubmitError("");
+    setSuccessMsg("");
+  };
+
+  const onFieldChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
 
   const load = async (p = page) => {
     const params = new URLSearchParams({ limit, page: p });
@@ -25,17 +82,34 @@ export default function Customers(){
   useEffect(()=>{ load(1); setPage(1); }, [limit]);
   useEffect(()=>{ load(page); }, [page]);
 
-  useEffect(()=>{ (async()=>{ try{ const s = await api.get('/api/stores'); setStores(s || []); }catch(e){}})(); }, []);
+   useEffect(() => {
+    setStores(extractStoreIds(customers));
+  }, [customers]);
 
   const handleAdd = async (e) => {
     e.preventDefault();
-    try{
-      await api.post('/api/customers', formData);
-      setShow(false);
-      setFormData({});
-      load(1);
-    }catch(err){
-      console.error(err);
+    setSubmitError("");
+    setSuccessMsg("");
+
+    const payload = buildPayload(formData);
+    const missing = validatePayload(payload);
+
+    if (missing.length) {
+      setSubmitError(`Missing/invalid: ${missing.join(", ")}`);
+      return;
+    }
+
+    try {
+      await api.post("/api/customers", payload);
+      setSuccessMsg(`Customer "${payload.first_name} ${payload.last_name}" added successfully.`);
+      await load(1);
+
+      setTimeout(() => {
+        closeModal();
+        resetForm();
+      }, 1200);
+    } catch (err) {
+      setSubmitError(err?.message || "Failed to add customer.");
     }
   };
 
@@ -53,7 +127,7 @@ export default function Customers(){
   };
 
   return (
-    <div>
+    <>
       <div className="d-flex align-items-center mb-3">
         <Form.Control type="search" placeholder="Search customers" value={q} onChange={e=>setQ(e.target.value)} style={{width:300}} />
         <Button className="ms-2" onClick={()=>{ setPage(1); load(1); }}>Search</Button>
@@ -72,6 +146,7 @@ export default function Customers(){
                 <Card.Title>{c.first_name} {c.last_name}</Card.Title>
                 <Card.Text>{c.email}</Card.Text>
                 <Card.Text>{c.address}, {c.city}, {c.country}</Card.Text>
+                <Card.Text>Store ID: {c.store_id}</Card.Text>
               </Card.Body>
             </Card>
           </Col>
@@ -80,12 +155,26 @@ export default function Customers(){
 
       <div className="d-flex justify-content-center mt-3">{makePagination()}</div>
 
-      <Modal show={show} onHide={()=>setShow(false)}>
+      <Modal
+        show={show}
+        onHide={closeModal}
+      >
         <Form onSubmit={handleAdd}>
           <Modal.Header closeButton>
             <Modal.Title>Add Customer</Modal.Title>
           </Modal.Header>
           <Modal.Body>
+            {successMsg && (
+              <Alert variant="success" className="mb-2">
+                {successMsg}
+              </Alert>
+            )}
+            {submitError && (
+              <Alert variant="danger" className="mb-2">
+                {submitError}
+              </Alert>
+            )}
+
             <Form.Group className="mb-2">
               <Form.Label>First Name</Form.Label>
               <Form.Control required value={formData.first_name||''} onChange={e=>setFormData({...formData, first_name:e.target.value})} />
@@ -99,12 +188,24 @@ export default function Customers(){
               <Form.Control type="email" required value={formData.email||''} onChange={e=>setFormData({...formData, email:e.target.value})} />
             </Form.Group>
             <Form.Group className="mb-2">
+              <Form.Label>Phone Number</Form.Label>
+              <Form.Control required value={formData.phone||''} onChange={e=>setFormData({...formData, phone:e.target.value})} />
+            </Form.Group>
+            <Form.Group className="mb-2">
               <Form.Label>Address</Form.Label>
               <Form.Control required value={formData.address||''} onChange={e=>setFormData({...formData, address:e.target.value})} />
             </Form.Group>
             <Form.Group className="mb-2">
+              <Form.Label>Postal Code</Form.Label>
+              <Form.Control required value={formData.postal_code||''} onChange={e=>setFormData({...formData, postal_code:e.target.value})} />
+            </Form.Group>
+            <Form.Group className="mb-2">
               <Form.Label>City</Form.Label>
               <Form.Control required value={formData.city||''} onChange={e=>setFormData({...formData, city:e.target.value})} />
+            </Form.Group>
+            <Form.Group className="mb-2">
+              <Form.Label>District/State/Province</Form.Label>
+              <Form.Control required value={formData.district||''} onChange={e=>setFormData({...formData, district:e.target.value})} />
             </Form.Group>
             <Form.Group className="mb-2">
               <Form.Label>Country</Form.Label>
@@ -112,18 +213,33 @@ export default function Customers(){
             </Form.Group>
             <Form.Group className="mb-2">
               <Form.Label>Store</Form.Label>
-              <Form.Select required value={formData.store_id||''} onChange={e=>setFormData({...formData, store_id: parseInt(e.target.value)})}>
-                <option value="">Select a store</option>
-                {stores.map(s => <option key={s.store_id} value={s.store_id}>{s.address}, {s.city}, {s.country}</option>)}
+              <Form.Select
+                name="store_id"
+                required
+                value={formData.store_id ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setFormData((prev) => ({
+                    ...prev,
+                    store_id: v === "" ? "" : Number(v),
+                  }));
+                }}
+              >
+                <option value="">Select store</option>
+                {stores.map((id) => (
+                  <option key={id} value={id}>
+                    Store ID: {id}
+                  </option>
+                ))}
               </Form.Select>
             </Form.Group>
           </Modal.Body>
           <Modal.Footer>
-            <Button variant="secondary" onClick={()=>setShow(false)}>Cancel</Button>
+            <Button variant="secondary" onClick={closeModal}>Cancel</Button>
             <Button type="submit" variant="primary">Add Customer</Button>
           </Modal.Footer>
         </Form>
       </Modal>
-    </div>
+    </>
   );
 }
