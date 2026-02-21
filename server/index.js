@@ -526,6 +526,20 @@ app.put("/api/customers/:id", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+app.delete("/api/customers/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const sql = `
+      DELETE FROM customer WHERE customer_id = ?;
+    `;
+    await pool.query(sql, [id]);
+
+    res.json({ message: "Successfully deleted" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 // Routes END
 
 // This should be at the very bottom of your app.js, after all other routes

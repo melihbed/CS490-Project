@@ -11,8 +11,10 @@ import {
 } from "react-bootstrap";
 import api from "../services/api";
 import Stack from "react-bootstrap/Stack";
-import Badge from "react-bootstrap/Badge";
 import { FaEdit } from "react-icons/fa"; // Edit icon
+import { Dropdown } from "react-bootstrap";
+import { BsThreeDotsVertical } from "react-icons/bs";
+import { MdDelete } from "react-icons/md";
 
 const INITIAL_FORM = {
   first_name: "",
@@ -181,6 +183,36 @@ export default function Customers() {
     }
   };
 
+  // Customer Delete
+  const handleDelete = async (c) => {
+    try {
+      // Confirm the deletion
+      const confirmed = window.confirm(
+        "Are you sure you want to delete this customer?"
+      );
+
+      if (confirmed) {
+        // Call API to delete the customer
+        const response = await fetch(`/api/customers/${c.customer_id}`, {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (response.ok) {
+          // Refresh the customer list
+          load(page);
+        } else {
+          // Failed to delete
+          alert("Failed to delete the customer!");
+        }
+      }
+    } catch (error) {
+      alert("Something went wrong: " + error.message);
+    }
+  };
+
   const makePagination = () => {
     const items = [];
     const windowSize = 5;
@@ -259,9 +291,22 @@ export default function Customers() {
                   {c.first_name} {c.last_name}
                 </Card.Title>
 
-                <Button variant="primary" onClick={() => handleEdit(c)}>
-                  <FaEdit /> Edit
-                </Button>
+                <Dropdown>
+                  <Dropdown.Toggle
+                    variant="light"
+                    bsPrefix="p-0 border-0 bg-transparent"
+                  >
+                    <BsThreeDotsVertical />
+                  </Dropdown.Toggle>
+                  <Dropdown.Menu>
+                    <Dropdown.Item onClick={() => handleEdit(c)}>
+                      <FaEdit /> Edit
+                    </Dropdown.Item>
+                    <Dropdown.Item onClick={() => handleDelete(c)}>
+                      <MdDelete /> Delete
+                    </Dropdown.Item>
+                  </Dropdown.Menu>
+                </Dropdown>
               </div>
               <Card.Text className="mb-1">
                 <strong>ID:</strong> {c.customer_id}
