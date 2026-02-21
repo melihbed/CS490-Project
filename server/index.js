@@ -2,15 +2,12 @@ const express = require("express");
 const cors = require("cors");
 const pool = require("./db/db");
 
-
-
 const port = 4000;
 
 const app = express();
 
 // Middleware START
 // Log and guard large request headers to help diagnose 431 errors
-
 
 app.use(cors());
 app.use(express.json());
@@ -340,6 +337,8 @@ app.get("/api/customers", async (req, res) => {
       c.store_id,
       a.address,
       a.district,
+      a.phone,
+      a.postal_code,
       ci.city,
       co.country
     FROM customer c
@@ -400,8 +399,18 @@ app.post("/api/customers", async (req, res) => {
 
     const store_id = Number(req.body.store_id);
 
-    if (!first_name || !last_name || !email || !address || !cityName || !countryName || !Number.isInteger(store_id)) {
-      return res.status(400).json({ error: "Missing/invalid required fields." });
+    if (
+      !first_name ||
+      !last_name ||
+      !email ||
+      !address ||
+      !cityName ||
+      !countryName ||
+      !Number.isInteger(store_id)
+    ) {
+      return res
+        .status(400)
+        .json({ error: "Missing/invalid required fields." });
     }
 
     await conn.beginTransaction();
@@ -456,13 +465,65 @@ app.post("/api/customers", async (req, res) => {
     );
 
     await conn.commit();
-    return res.status(201).json({ customer_id: insCustomer.insertId, address_id, city_id, country_id });
+    return res.status(201).json({
+      customer_id: insCustomer.insertId,
+      address_id,
+      city_id,
+      country_id,
+    });
   } catch (err) {
     await conn.rollback();
     console.log("POST /api/customers error:", err.message, err);
-    return res.status(500).json({ error: err.message || "Internal Server Error." });
+    return res
+      .status(500)
+      .json({ error: err.message || "Internal Server Error." });
   } finally {
     conn.release();
+  }
+});
+
+app.put("/api/customers/:id", async (req, res) => {
+  try {
+    // To get the id from the URL
+    const id = req.params.id;
+    // To get the udpated customer data from the frontend
+    const body = req.body;
+
+    console.log(id);
+    console.log(body);
+
+    const sql = `
+      UPDATE customer
+      SET first_name = ?, last_name = ?, email = ?, store_id = ?
+      WHERE customer_id = ?
+    `;
+    await pool.query(sql, [
+      body.first_name,
+      body.last_name,
+      body.email,
+      body.store_id,
+      id,
+    ]);
+    // Get the address_id of the customer to upadate the address table
+    const [customer] = await pool.query(
+      `SELECT address_id FROM customer WHERE customer_id = ?`,
+      [id]
+    );
+    const address_id = customer[0].address_id;
+
+    await pool.query(
+      `UPDATE address
+      SET phone = ?,
+          district = ?,
+          postal_code = ?,
+          address = ?
+      WHERE address_id = ?`,
+      [body.phone, body.district, body.postal_code, body.address, address_id]
+    );
+
+    res.json({ message: "Customer updated successfully" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 // Routes END
