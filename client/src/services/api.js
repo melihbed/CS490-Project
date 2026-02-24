@@ -1,5 +1,7 @@
-const BASE = '';
+const BASE =
+  (process.env.REACT_APP_API_BASE || '')
 
+  
 const handleRes = async (res) => {
   if (!res.ok) {
     const text = await res.text();
