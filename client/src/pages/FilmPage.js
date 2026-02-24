@@ -33,6 +33,10 @@ export default function FilmPage() {
         <Card.Text>Film ID: {film.film_id}</Card.Text>
         <Card.Text>Category: {film.category}</Card.Text>
         <Card.Text>Description: {film.description}</Card.Text>
+        <Card.Text>Release Year: {film.release_year}</Card.Text>
+        <Card.Text>Rating: {film.rating}</Card.Text>
+        <Card.Text>Rental Rate: ${film.rental_rate}</Card.Text>
+        <Card.Text>Rental Count: {film.rental_count}</Card.Text>
       </Card.Body>
     </Card>
   );

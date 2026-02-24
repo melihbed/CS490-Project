@@ -135,9 +135,17 @@ app.get("/api/actor/:id", async (req, res) => {
     SELECT 
         actor.actor_id,
         actor.first_name, 
-        actor.last_name
+        actor.last_name,
+        COUNT(r.rental_id) AS rental_count
     FROM actor
-    WHERE actor_id = ?
+    JOIN film_actor fa
+        ON fa.actor_id = actor.actor_id
+    JOIN inventory i
+        ON i.film_id = fa.film_id
+    JOIN rental r
+        ON r.inventory_id = i.inventory_id
+    WHERE actor.actor_id = ?
+    GROUP BY actor.actor_id, actor.first_name, actor.last_name
     `;
     const rows = await pool.execute(query, [parseInt(actor_id)]);
     if (rows.length === 0) {
