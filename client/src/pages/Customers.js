@@ -12,7 +12,7 @@ import api from "../services/api";
 import Stack from "react-bootstrap/Stack";
 import { FaEdit } from "react-icons/fa"; // Edit icon
 import { Dropdown } from "react-bootstrap";
-import { BsThreeDotsVertical } from "react-icons/bs";
+import { BsThreeDotsVertical, BsCardList } from "react-icons/bs";
 import { MdDelete } from "react-icons/md";
 
 const INITIAL_FORM = {
@@ -314,7 +314,7 @@ export default function Customers() {
                     <Dropdown.Item
                       onClick={() => handleViewDetails(c.customer_id)}
                     >
-                      View Details
+                      <BsCardList /> View Details
                     </Dropdown.Item>
                     <Dropdown.Item
                       onClick={() => handleEdit(c)}
