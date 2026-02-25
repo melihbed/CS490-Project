@@ -1,8 +1,6 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Row,
-  Col,
   Card,
   Form,
   Button,
@@ -92,10 +90,10 @@ export default function Customers() {
     setSuccessMsg("");
   };
 
-  const onFieldChange = (e) => {
+  /*const onFieldChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-  };
+  };*/
 
   const load = async (p = page) => {
     const params = new URLSearchParams({ limit, page: p });
@@ -217,6 +215,10 @@ export default function Customers() {
     }
   };
 
+  const handleViewDetails = (customerId) => {
+    navigate(`/customers/${customerId}`);
+  };
+
   const makePagination = () => {
     const items = [];
     const windowSize = 5;
@@ -290,16 +292,8 @@ export default function Customers() {
         {customers.map((c) => (
           <Card
             key={c.customer_id}
-            role="button"
-            tabIndex={0}
-            style={{ cursor: "pointer" }}
-            onClick={() => navigate(`/customers/${c.customer_id}`)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                navigate(`/customers/${c.customer_id}`);
-              }
-            }}
+            
+            
           >
             <Card.Body>
               <div className="d-flex justify-content-between align-items-start mb-2">
@@ -307,28 +301,28 @@ export default function Customers() {
                   {c.first_name} {c.last_name}
                 </Card.Title>
 
-                <Dropdown onClick={(e) => e.stopPropagation()}>
+                <Dropdown align="end">
                   <Dropdown.Toggle
+                    as={Button}
+                    id={`customer-actions-${c.customer_id}`}
                     variant="light"
-                    bsPrefix="p-0 border-0 bg-transparent"
-                    onClick={(e) => e.stopPropagation()}
+                    className="p-0 border-0 bg-transparent text-dark shadow-none"
                   >
-                    <BsThreeDotsVertical />
+                    <BsThreeDotsVertical size={18} />
                   </Dropdown.Toggle>
                   <Dropdown.Menu>
                     <Dropdown.Item
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEdit(c);
-                      }}
+                      onClick={() => handleViewDetails(c.customer_id)}
+                    >
+                      View Details
+                    </Dropdown.Item>
+                    <Dropdown.Item
+                      onClick={() => handleEdit(c)}
                     >
                       <FaEdit /> Edit
                     </Dropdown.Item>
                     <Dropdown.Item
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(c);
-                      }}
+                      onClick={() => handleDelete(c)}
                     >
                       <MdDelete /> Delete
                     </Dropdown.Item>
