@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Row,
   Col,
@@ -81,6 +82,7 @@ export default function Customers() {
   const [formData, setFormData] = useState(INITIAL_FORM);
   const [successMsg, setSuccessMsg] = useState("");
   const [submitError, setSubmitError] = useState("");
+  const navigate = useNavigate();
 
   const resetForm = () => setFormData(INITIAL_FORM);
 
@@ -115,6 +117,8 @@ export default function Customers() {
   useEffect(() => {
     setStores(extractStoreIds(customers));
   }, [customers]);
+
+  
 
   const handleAdd = async (e) => {
     e.preventDefault();
@@ -284,25 +288,48 @@ export default function Customers() {
       </div>
       <Stack gap={3}>
         {customers.map((c) => (
-          <Card key={c.customer_id}>
+          <Card
+            key={c.customer_id}
+            role="button"
+            tabIndex={0}
+            style={{ cursor: "pointer" }}
+            onClick={() => navigate(`/customers/${c.customer_id}`)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                navigate(`/customers/${c.customer_id}`);
+              }
+            }}
+          >
             <Card.Body>
               <div className="d-flex justify-content-between align-items-start mb-2">
                 <Card.Title className="mb-0">
                   {c.first_name} {c.last_name}
                 </Card.Title>
 
-                <Dropdown>
+                <Dropdown onClick={(e) => e.stopPropagation()}>
                   <Dropdown.Toggle
                     variant="light"
                     bsPrefix="p-0 border-0 bg-transparent"
+                    onClick={(e) => e.stopPropagation()}
                   >
                     <BsThreeDotsVertical />
                   </Dropdown.Toggle>
                   <Dropdown.Menu>
-                    <Dropdown.Item onClick={() => handleEdit(c)}>
+                    <Dropdown.Item
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEdit(c);
+                      }}
+                    >
                       <FaEdit /> Edit
                     </Dropdown.Item>
-                    <Dropdown.Item onClick={() => handleDelete(c)}>
+                    <Dropdown.Item
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(c);
+                      }}
+                    >
                       <MdDelete /> Delete
                     </Dropdown.Item>
                   </Dropdown.Menu>

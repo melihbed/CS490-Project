@@ -93,6 +93,106 @@ app.get("/api/film/:id", async (req, res) => {
   }
 });
 
+app.post("/api/films/:id/rent", async (req, res) => {
+  const conn = await pool.getConnection();
+
+  try {
+    const filmId = Number(req.params.id);
+    const customerId = Number(req.body.customer_id);
+
+    if (isNaN(filmId) || isNaN(customerId)) {
+      return res.status(400).json({ error: "Invalid film_id or customer_id." });
+    }
+
+    await conn.beginTransaction();
+
+    const [customerRows] = await conn.query(
+      "SELECT customer_id, store_id FROM customer WHERE customer_id = ?",
+      [customerId]
+    );
+    if (!customerRows.length) {
+      await conn.rollback();
+      return res.status(404).json({ error: "Customer not found." });
+    }
+
+    const [inventoryRows] = await conn.query(
+      `
+      SELECT i.inventory_id
+      FROM inventory i
+      LEFT JOIN rental r
+        ON r.inventory_id = i.inventory_id
+       AND r.return_date IS NULL
+      WHERE i.film_id = ?
+        AND r.rental_id IS NULL
+      ORDER BY i.inventory_id ASC
+      LIMIT 1
+      `,
+      [filmId]
+    );
+
+    if (!inventoryRows.length) {
+      await conn.rollback();
+      return res.status(409).json({ error: "No available inventory for this film." });
+    }
+
+    const [staffRows] = await conn.query(
+      `
+      SELECT staff_id
+      FROM staff
+      WHERE store_id = ?
+      ORDER BY staff_id ASC
+      LIMIT 1
+      `,
+      [customerRows[0].store_id]
+    );
+
+    if (!staffRows.length) {
+      await conn.rollback();
+      return res.status(500).json({ error: "No staff available for customer's store." });
+    }
+
+    const inventoryId = inventoryRows[0].inventory_id;
+    const staffId = staffRows[0].staff_id;
+
+    const [rentalResult] = await conn.query(
+      `
+      INSERT INTO rental (rental_date, inventory_id, customer_id, staff_id, last_update)
+      VALUES (NOW(), ?, ?, ?, NOW())
+      `,
+      [inventoryId, customerId, staffId]
+    );
+
+    const rentalId = rentalResult.insertId;
+
+    const [filmRows] = await conn.query(
+      "SELECT rental_rate FROM film WHERE film_id = ? LIMIT 1",
+      [filmId]
+    );
+    const amount = filmRows[0]?.rental_rate ?? 0;
+
+    await conn.query(
+      `
+      INSERT INTO payment (customer_id, staff_id, rental_id, amount, payment_date)
+      VALUES (?, ?, ?, ?, NOW())
+      `,
+      [customerId, staffId, rentalId, amount]
+    );
+
+    await conn.commit();
+    return res.status(201).json({
+      message: "Rental created successfully.",
+      rental_id: rentalId,
+      inventory_id: inventoryId,
+    });
+  } catch (err) {
+    await conn.rollback();
+    console.log(err);
+    return res.status(500).json({ error: "Internal server error." });
+  } finally {
+    conn.release();
+  }
+});
+
 // Create GET route for top 5 actors
 app.get("/api/top-actors", async (req, res) => {
   try {
@@ -373,6 +473,128 @@ app.get("/api/customers", async (req, res) => {
     res.status(500).json({ Error: "Internal Server Error!" });
   }
 });
+app.get("/api/customers/:id/rentals", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const sql = `
+      SELECT
+    c.customer_id,
+    c.first_name,
+    c.last_name,
+    c.email,
+    c.active,
+    c.create_date,
+    c.store_id,
+
+    a.address,
+    a.district,
+    a.phone,
+    a.postal_code,
+    ci.city,
+    co.country,
+
+    r.rental_id,
+    r.rental_date,
+    r.return_date,
+    f.film_id,
+    f.title,
+
+    CASE 
+        WHEN r.return_date IS NULL THEN 'Out'
+        ELSE 'Returned'
+    END AS rental_status
+
+FROM customer c
+LEFT JOIN address a 
+    ON a.address_id = c.address_id
+LEFT JOIN city ci 
+    ON ci.city_id = a.city_id
+LEFT JOIN country co 
+    ON co.country_id = ci.country_id
+
+-- Rental joins
+LEFT JOIN rental r 
+    ON r.customer_id = c.customer_id
+LEFT JOIN inventory i 
+    ON i.inventory_id = r.inventory_id
+LEFT JOIN film f 
+    ON f.film_id = i.film_id
+
+WHERE c.customer_id = ?
+
+ORDER BY c.first_name ASC, 
+         c.last_name ASC,
+         r.rental_date DESC
+    `;
+    const [rows] = await pool.query(sql, [id]);
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "Customer not found!" });
+    }
+
+    const customer = {
+      customer_id: rows[0].customer_id,
+      first_name: rows[0].first_name,
+      last_name: rows[0].last_name,
+      email: rows[0].email,
+      active: rows[0].active,
+      create_date: rows[0].create_date,
+      store_id: rows[0].store_id,
+      address: rows[0].address,
+      district: rows[0].district,
+      phone: rows[0].phone,
+      postal_code: rows[0].postal_code,
+      city: rows[0].city,
+      country: rows[0].country,
+    };
+
+    const rentals = rows
+      .filter((row) => row.rental_id != null)
+      .map((row) => ({
+        rental_id: row.rental_id,
+        rental_date: row.rental_date,
+        return_date: row.return_date,
+        film_id: row.film_id,
+        title: row.title,
+        rental_status: row.rental_status,
+      }));
+
+    res.json({ customer, rentals });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ error: "Internal Server Error!" });
+  }
+});
+
+app.put("/api/rentals/:id/return", async (req, res) => {
+  try {
+    const rentalId = Number(req.params.id);
+    if (isNaN(rentalId)) {
+      return res.status(400).json({ error: "Invalid rental id." });
+    }
+
+    const [result] = await pool.query(
+      `
+      UPDATE rental
+      SET return_date = NOW(), last_update = NOW()
+      WHERE rental_id = ? AND return_date IS NULL
+      `,
+      [rentalId]
+    );
+
+    if (result.affectedRows === 0) {
+      return res
+        .status(404)
+        .json({ error: "Rental not found or already returned." });
+    }
+
+    res.json({ message: "Rental marked as returned." });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ error: "Internal Server Error!" });
+  }
+});
+
+
 
 app.post("/api/customers", async (req, res) => {
   const conn = await pool.getConnection();

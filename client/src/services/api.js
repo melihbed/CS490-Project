@@ -23,6 +23,14 @@ const api = {
     });
     return handleRes(res);
   },
+  put: async (path, body = {}) => {
+    const res = await fetch(`${BASE}${path}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return handleRes(res);
+  },
 };
 
 export default api;
